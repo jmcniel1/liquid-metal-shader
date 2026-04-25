@@ -1,0 +1,1722 @@
+<!doctype html>
+<!--
+ * Liquid metal mode adapted from paper-design/liquid-logo
+ *   https://github.com/paper-design/liquid-logo
+ *   Licensed under PolyForm Shield 1.0.0
+ *   https://polyformproject.org/licenses/shield/1.0.0
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Liquid Metal Shader</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --panel: #141417;
+    --panel-2: #1c1c21;
+    --line: #2a2a31;
+    --text: #e7e7ea;
+    --muted: #8a8a93;
+    --accent: #c7d2fe;
+    --slider-track: rgba(255,255,255,0.06);
+    --slider-fill:      #5b6bff;
+    --slider-fill-alt:  #8b5cf6;
+    --slider-fill-sweep:#22c55e;
+    --slider-fill-liquid: #06b6d4;
+    --slider-fill-refr:   #f59e0b;
+    --slider-height: 42px;
+    --slider-radius: 14px;
+    --font: "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 13px/1.4 var(--font);
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    overflow: hidden;
+  }
+  #stage { position: relative; overflow: hidden; background: #000; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #panel {
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    padding: 16px 14px 24px;
+    overflow-y: auto;
+  }
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 15px; color: var(--text);
+    margin: 0; font-weight: 600; letter-spacing: -.01em;
+  }
+  #randomize {
+    background: var(--accent); color: #0a0a0b;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font: 600 12px var(--font);
+    cursor: pointer;
+  }
+  #randomize:hover { filter: brightness(1.05); }
+
+  .group {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-2);
+    padding: 10px 10px;
+    margin-bottom: 10px;
+  }
+  .group h2 {
+    font-size: 12px; color: var(--text);
+    margin: 0 0 8px; padding: 0 4px;
+    font-weight: 600; letter-spacing: -.005em;
+  }
+
+  .lm-sliders {
+    display: flex; flex-direction: column; overflow: hidden;
+    border-radius: var(--slider-radius);
+    background: rgba(0,0,0,0.2);
+  }
+  .lm-slider {
+    position: relative; height: var(--slider-height); width: 100%;
+    cursor: ew-resize; user-select: none; -webkit-user-select: none;
+    touch-action: none; overflow: hidden;
+    background: var(--slider-track);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .lm-sliders .lm-slider:last-child { border-bottom: 0; }
+  .lm-slider__fill {
+    position: absolute; inset: 0 auto 0 0;
+    background: var(--slider-fill);
+    transition: width 60ms linear;
+    display: flex; align-items: center; justify-content: flex-end;
+    border-top-right-radius: 4px; border-bottom-right-radius: 4px;
+  }
+  .lm-slider__tick {
+    width: 1.5px; height: 45%;
+    background: rgba(255,255,255,0.45);
+    border-radius: 2px; margin-right: 8px;
+  }
+  .lm-slider__row {
+    position: absolute; inset: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 14px; pointer-events: none; z-index: 2;
+  }
+  .lm-slider__label {
+    font: 400 13px var(--font);
+    letter-spacing: -.01em; color: #fff;
+    mix-blend-mode: difference;
+  }
+  .lm-slider__value {
+    font: 500 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    color: #fff; opacity: .85; mix-blend-mode: difference;
+  }
+  .pattern-group  .lm-slider__fill { background: var(--slider-fill); }
+  .metal-group    .lm-slider__fill { background: var(--slider-fill-alt); }
+  .sweep-group    .lm-slider__fill { background: var(--slider-fill-sweep); }
+  .shape-group    .lm-slider__fill { background: #64748b; }
+  .liquid-pattern-group .lm-slider__fill { background: var(--slider-fill-liquid); }
+  .liquid-refr-group    .lm-slider__fill { background: var(--slider-fill-refr); }
+  .liquid-liquid-group  .lm-slider__fill { background: var(--slider-fill-alt); }
+  .liquid-anim-group    .lm-slider__fill { background: var(--slider-fill-sweep); }
+
+  .mode-tabs {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; padding: 3px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; margin-bottom: 12px;
+  }
+  .mode-tabs button {
+    background: transparent; color: var(--muted);
+    border: 0; border-radius: 7px;
+    padding: 7px 10px; cursor: pointer;
+    font: 500 12px var(--font);
+    letter-spacing: -.005em;
+  }
+  .mode-tabs button.active {
+    background: var(--panel); color: var(--text);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.4);
+  }
+  body.mode-mesh   .liquid-only { display: none !important; }
+  body.mode-liquid .mesh-only   { display: none !important; }
+
+  .field-row {
+    display: grid; grid-template-columns: 90px 1fr;
+    align-items: center; gap: 10px;
+    padding: 6px 4px 10px;
+  }
+  .field-row label { color: var(--muted); font: 400 12px var(--font); }
+  select, input[type="number"] {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; font: 400 13px var(--font); width: 100%;
+  }
+
+  .colors-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; padding: 4px;
+  }
+  .color-cell {
+    position: relative;
+    display: flex; flex-direction: column; gap: 6px;
+    color: var(--muted); font-size: 11px;
+  }
+  .color-cell input[type="color"] {
+    width: 100%; height: 34px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: transparent; cursor: pointer;
+  }
+  .color-cell .remove {
+    position: absolute; top: 16px; right: 4px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: rgba(0,0,0,0.55); color: #fff;
+    border: none; font-size: 11px; line-height: 16px;
+    cursor: pointer; opacity: 0; transition: opacity .15s;
+    padding: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .color-cell:hover .remove { opacity: 1; }
+  .add-cell { display: flex; align-items: flex-end; }
+  .add-cell button {
+    width: 100%; height: 34px;
+    border: 1px dashed var(--line); border-radius: 8px;
+    background: transparent; color: var(--muted);
+    font: 400 18px var(--font); cursor: pointer; padding: 0;
+  }
+  .add-cell button:hover { border-color: var(--accent); color: var(--accent); }
+  .add-cell button:disabled { opacity: .35; cursor: default; }
+
+  .presets-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 4px;
+    margin-top: 6px;
+  }
+  .preset-chip {
+    position: relative;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+  }
+  .preset-chip:hover { border-color: var(--accent); }
+  .preset-chip span {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 600 11px var(--font);
+    color: #fff;
+    letter-spacing: -.01em;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.65), 0 0 1px rgba(0,0,0,0.8);
+    pointer-events: none;
+  }
+  .colors-toolbar { padding: 4px; margin-top: 4px; }
+  .colors-toolbar button {
+    width: 100%;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font: 400 12px var(--font);
+  }
+  .colors-toolbar button:hover { border-color: var(--accent); }
+
+  .bg-row {
+    display: grid; grid-template-columns: 90px 1fr;
+    align-items: center; gap: 10px; padding: 4px;
+  }
+  .bg-row label { color: var(--muted); font: 400 12px var(--font); }
+  .bg-row input[type="color"] {
+    width: 100%; height: 34px; border: 1px solid var(--line);
+    border-radius: 8px; background: transparent; cursor: pointer;
+  }
+
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px; }
+  button.gbtn {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 10px; cursor: pointer; font: 400 13px var(--font);
+  }
+  button.gbtn:hover { border-color: #3a3a44; }
+  button.primary {
+    background: var(--accent); color: #0a0a0b;
+    border-color: var(--accent); font-weight: 600;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+
+  .lm-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 4px 4px; color: var(--text); font-size: 12px;
+  }
+  .lm-toggle input { display: none; }
+  .lm-toggle__track {
+    width: 36px; height: 20px; border-radius: 999px;
+    background: #333; position: relative; transition: background .15s;
+  }
+  .lm-toggle__thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: left .15s;
+  }
+  .lm-toggle input:checked + .lm-toggle__track { background: var(--accent); }
+  .lm-toggle input:checked + .lm-toggle__track .lm-toggle__thumb { left: 18px; }
+
+  .file-name { color: var(--muted); font-size: 11px; margin: 6px 4px 0; word-break: break-all; }
+  .svg-thumb {
+    width: 64px; height: 64px;
+    margin: 8px 4px 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #0a0a0f;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .svg-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  footer { color: var(--muted); font-size: 11px; margin-top: 8px; text-align: center; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: #fff; color: #111;
+    padding: 8px 14px; border-radius: 999px;
+    font-weight: 600; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  dialog {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 0; width: min(820px, 92vw); max-height: 80vh;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  .dlg-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  .dlg-head h3 { margin: 0; font-size: 14px; }
+  dialog pre {
+    margin: 0; padding: 16px;
+    max-height: 60vh; overflow: auto;
+    background: #0c0c0f; color: #d6d6dc;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="gl"></canvas></div>
+
+  <aside id="panel">
+    <div class="header">
+      <h1>Liquid metal</h1>
+      <button id="randomize">Randomize</button>
+    </div>
+
+    <div class="mode-tabs" role="tablist">
+      <button id="tabMesh"   class="active" type="button">Mesh metal</button>
+      <button id="tabLiquid" type="button">Liquid metal</button>
+    </div>
+
+    <div class="group pattern-group mesh-only">
+      <h2>Pattern</h2>
+      <div class="field-row">
+        <label>Style</label>
+        <select id="style">
+          <option value="0">Flow</option>
+          <option value="1">Ripple</option>
+          <option value="2">Swirl</option>
+          <option value="3">Blob</option>
+        </select>
+      </div>
+      <div class="lm-sliders">
+        <input type="range" id="scale"    data-label="Scale"      min="0.3" max="6"    step="0.01" value="0.5">
+        <input type="range" id="distort"  data-label="Distortion" min="0"   max="3"    step="0.01" value="0.4">
+        <input type="range" id="speed"    data-label="Flow speed" min="0"   max="2"    step="0.01" value="0.15">
+        <input type="range" id="octaves"  data-label="Detail"     min="1"   max="6"    step="1"    value="4">
+      </div>
+    </div>
+
+    <div class="group metal-group mesh-only">
+      <h2>Metal</h2>
+      <div class="lm-sliders">
+        <input type="range" id="shine"    data-label="Shine"     min="0"   max="2"   step="0.01" value="1.1">
+        <input type="range" id="fresnel"  data-label="Fresnel"   min="0"   max="6"   step="0.01" value="2.2">
+        <input type="range" id="contrast" data-label="Contrast"  min="0.3" max="2.5" step="0.01" value="1.25">
+        <input type="range" id="chroma"   data-label="Chromatic" min="0"   max="1"   step="0.01" value="0.25">
+      </div>
+    </div>
+
+    <div class="group sweep-group mesh-only">
+      <h2>Sweep</h2>
+      <div class="lm-sliders">
+        <input type="range" id="sweep"      data-label="Amount"   min="0" max="1"   step="0.01" value="0">
+        <input type="range" id="sweepAngle" data-label="Angle"    min="0" max="360" step="1"    value="45">
+        <input type="range" id="sweepPos"   data-label="Position" min="0" max="1"   step="0.01" value="0.5">
+        <input type="range" id="sweepWidth" data-label="Width"    min="0.01" max="1" step="0.01" value="0.15">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Colors</h2>
+      <div class="colors-grid" id="colorsGrid"></div>
+      <div class="presets-row" id="presetsRow"></div>
+      <div class="colors-toolbar">
+        <button id="randomizeColors" type="button">Randomize colors</button>
+      </div>
+      <div class="bg-row mesh-only" style="margin-top:8px">
+        <label>Background</label>
+        <input type="color" id="bg" value="#05050a">
+      </div>
+    </div>
+
+    <div class="group shape-group mesh-only">
+      <h2>Shape (SVG)</h2>
+      <div class="btn-row">
+        <button class="gbtn" id="uploadBtn">Upload SVG</button>
+        <button class="gbtn" id="clearSvg">Clear</button>
+      </div>
+      <input type="file" id="svgFile" accept=".svg,image/svg+xml" hidden />
+      <div class="lm-sliders" style="margin-top:8px">
+        <input type="range" id="pad"         data-label="Padding"     min="0"     max="0.4"  step="0.01"  value="0.08">
+      </div>
+      <div class="svg-thumb" id="svgThumb" hidden></div>
+      <div class="file-name" id="svgName"></div>
+    </div>
+
+    <div class="group liquid-pattern-group liquid-only">
+      <h2>Pattern</h2>
+      <div class="lm-sliders">
+        <input type="range" id="lq_patternScale" data-label="Scale" min="1"   max="10"   step="0.1"   value="2">
+        <input type="range" id="lq_patternBlur"  data-label="Blur"  min="0"   max="0.05" step="0.001" value="0.005">
+      </div>
+    </div>
+
+    <div class="group liquid-refr-group liquid-only">
+      <h2>Refraction</h2>
+      <div class="lm-sliders">
+        <input type="range" id="lq_refraction" data-label="Refraction" min="0" max="0.06" step="0.001" value="0.015">
+      </div>
+    </div>
+
+    <div class="group liquid-liquid-group liquid-only">
+      <h2>Liquid</h2>
+      <div class="lm-sliders">
+        <input type="range" id="lq_liquid" data-label="Liquid" min="0" max="1" step="0.01" value="0.07">
+        <input type="range" id="lq_edge"   data-label="Edge"   min="0" max="1" step="0.01" value="0.4">
+      </div>
+    </div>
+
+    <div class="group liquid-anim-group liquid-only">
+      <h2>Animation</h2>
+      <div class="lm-sliders">
+        <input type="range" id="lq_speed" data-label="Speed" min="0" max="1" step="0.01" value="0.3">
+      </div>
+    </div>
+
+    <div class="group liquid-only">
+      <h2>Shape (SVG)</h2>
+      <div class="btn-row">
+        <button class="gbtn" id="lqUploadBtn">Upload SVG</button>
+        <button class="gbtn" id="lqClearImg">Clear</button>
+      </div>
+      <input type="file" id="lqImgFile" accept=".svg,image/svg+xml" hidden />
+      <div class="svg-thumb" id="lqSvgThumb" hidden></div>
+      <div class="file-name" id="lqImgName"></div>
+    </div>
+
+    <div class="group">
+      <h2>Export</h2>
+      <div class="field-row">
+        <label>Width</label>
+        <input type="number" id="exW" value="1024" min="64" max="4096" step="1">
+      </div>
+      <div class="field-row" style="padding-top:0">
+        <label>Height</label>
+        <input type="number" id="exH" value="1024" min="64" max="4096" step="1">
+      </div>
+      <label class="lm-toggle">
+        <span>Transparent outside shape</span>
+        <input type="checkbox" id="transparent" checked>
+        <span class="lm-toggle__track"><span class="lm-toggle__thumb"></span></span>
+      </label>
+
+      <div class="btn-row" style="margin-top:10px">
+        <button id="snap" class="gbtn primary">Save PNG</button>
+        <button id="reset" class="gbtn">Reset</button>
+      </div>
+      <div class="btn-row mesh-only" style="margin-top:8px">
+        <button id="copyShader" class="gbtn">Copy GLSL</button>
+        <button id="viewShader" class="gbtn">View shader</button>
+      </div>
+      <footer>WebGL2 · localhost</footer>
+    </div>
+  </aside>
+
+  <div id="toast">Copied</div>
+
+  <dialog id="shaderDlg">
+    <div class="dlg-head">
+      <h3>Fragment shader (GLSL ES 3.00)</h3>
+      <button id="closeDlg" class="gbtn">Close</button>
+    </div>
+    <pre id="shaderSrc"></pre>
+  </dialog>
+
+<script id="vs" type="x-shader/x-vertex">#version 300 es
+in vec2 a_pos;
+out vec2 v_uv;
+void main(){
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+uniform vec2  u_res;
+uniform float u_time;
+uniform int   u_style;
+uniform float u_scale;
+uniform float u_distort;
+uniform float u_speed;
+uniform int   u_octaves;
+uniform float u_shine;
+uniform float u_fresnel;
+uniform float u_contrast;
+uniform float u_chroma;
+uniform sampler2D u_ramp;
+uniform vec3  u_bg;
+uniform sampler2D u_mask;
+uniform int   u_hasMask;
+uniform int   u_transparent;
+uniform float u_sweep;
+uniform float u_sweepAngle;
+uniform float u_sweepPos;
+uniform float u_sweepWidth;
+
+vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
+vec2 mod289(vec2 x){ return x - floor(x*(1.0/289.0))*289.0; }
+vec3 permute(vec3 x){ return mod289(((x*34.0)+1.0)*x); }
+float snoise(vec2 v){
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                     -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod289(i);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+  m = m*m; m = m*m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+  vec3 g;
+  g.x  = a0.x * x0.x + h.x * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
+float fbm(vec2 p, int oct){
+  float a = 0.5, s = 0.0, n = 0.0;
+  for(int i=0;i<6;i++){
+    if(i>=oct) break;
+    s += a * snoise(p);
+    n += a;
+    p *= 2.02;
+    a *= 0.5;
+  }
+  return s / max(n, 0.0001);
+}
+
+float pattern(vec2 p, float t, out vec2 flow){
+  vec2 q = vec2(fbm(p + vec2(0.0, t*0.3), u_octaves),
+                fbm(p + vec2(5.2, 1.3) + vec2(t*0.2, 0.0), u_octaves));
+  vec2 r = vec2(fbm(p + u_distort*q + vec2(1.7,9.2) + t*0.15, u_octaves),
+                fbm(p + u_distort*q + vec2(8.3,2.8) + t*0.126, u_octaves));
+  flow = r;
+  return fbm(p + u_distort*r, u_octaves);
+}
+
+float styleField(vec2 uv, float t, out vec2 flow){
+  vec2 p = uv * u_scale;
+  if(u_style == 1){
+    float d = length(uv);
+    p += 0.6*vec2(cos(d*8.0 - t*1.5), sin(d*8.0 - t*1.5));
+  } else if(u_style == 2){
+    float a = atan(uv.y, uv.x);
+    float r = length(uv);
+    a += (1.2 - r) * 2.2;
+    p = vec2(cos(a), sin(a)) * r * u_scale;
+  } else if(u_style == 3){
+    p = uv * u_scale * 1.3;
+    p += 0.4*vec2(sin(t*0.7 + uv.y*3.0), cos(t*0.6 + uv.x*3.0));
+  }
+  return pattern(p, t, flow);
+}
+
+vec3 sampleRamp(float v){
+  return texture(u_ramp, vec2(clamp(v, 0.0, 1.0), 0.5)).rgb;
+}
+
+// Combined height field: FBM-derived pattern + optional directional sweep band.
+// Mixed in here (not just at the top of metalAt) so the normal-estimation samples
+// pick up the sweep too — gives the band a real specular rim, not just a color stripe.
+float compositeH(vec2 uv, float t){
+  vec2 flow;
+  float h = styleField(uv, t, flow);
+  if (u_sweep > 0.001) {
+    vec2 sdir = vec2(cos(u_sweepAngle), sin(u_sweepAngle));
+    float spos = dot(uv, sdir) * 0.5 + 0.5;
+    float w = max(u_sweepWidth, 0.001);
+    float sH = smoothstep(u_sweepPos - w, u_sweepPos + w, spos) * 2.0 - 1.0;
+    h = mix(h, sH, u_sweep);
+  }
+  return h;
+}
+
+vec3 metalAt(vec2 uv, float t){
+  float h  = compositeH(uv, t);
+  float e  = 0.0025;
+  float hx = compositeH(uv + vec2(e, 0.0), t);
+  float hy = compositeH(uv + vec2(0.0, e), t);
+  vec3 n   = normalize(vec3((h-hx)/e, (h-hy)/e, 1.0));
+
+  vec3 L = normalize(vec3(cos(t*0.5)*0.8, sin(t*0.4)*0.8, 0.9));
+  vec3 V = vec3(0.0, 0.0, 1.0);
+  vec3 H = normalize(L + V);
+
+  float spec = pow(clamp(dot(n, H), 0.0, 1.0), 24.0 + 40.0*u_shine);
+  float fres = pow(1.0 - clamp(dot(n, V), 0.0, 1.0), u_fresnel);
+
+  float v = 0.5 + 0.5*h;
+  v = pow(v, u_contrast);
+
+  float ca = u_chroma * 0.06;
+  vec3 col;
+  col.r = sampleRamp(v + ca).r;
+  col.g = sampleRamp(v).g;
+  col.b = sampleRamp(v - ca).b;
+  col += spec * u_shine * vec3(1.0, 0.97, 0.92);
+  col += fres * 0.35 * sampleRamp(0.8);
+  return col;
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*u_res) / min(u_res.x, u_res.y);
+  float t = u_time * u_speed;
+  vec2 muv = vec2(v_uv.x, 1.0 - v_uv.y);
+
+  vec3 col;
+  float alpha = 1.0;
+
+  if (u_hasMask == 1) {
+    float k = texture(u_mask, muv).a;
+    col = metalAt(uv, t);
+    if (u_transparent == 1) alpha = k;
+    else col = mix(u_bg, col, k);
+  } else {
+    col = metalAt(uv, t);
+    col = mix(u_bg, col, smoothstep(0.0, 0.02, length(col)));
+    float r = length(uv);
+    col *= smoothstep(1.4, 0.2, r);
+  }
+
+  // Display dither — breaks up 8-bit ramp banding without visible grain.
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (dither - 0.5) / 255.0;
+
+  outColor = vec4(col, alpha);
+}
+</script>
+
+<script id="vs-liquid" type="x-shader/x-vertex">#version 300 es
+precision mediump float;
+
+in vec2 a_position;
+out vec2 vUv;
+
+void main() {
+    vUv = .5 * (a_position + 1.);
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+</script>
+
+<script id="fs-liquid" type="x-shader/x-fragment">#version 300 es
+precision mediump float;
+
+in vec2 vUv;
+out vec4 fragColor;
+
+uniform sampler2D u_image_texture;
+uniform float u_time;
+uniform float u_ratio;
+uniform float u_img_ratio;
+uniform float u_patternScale;
+uniform float u_refraction;
+uniform float u_edge;
+uniform float u_patternBlur;
+uniform float u_liquid;
+uniform vec3  u_color1;
+uniform vec3  u_color2;
+
+
+#define TWO_PI 6.28318530718
+#define PI 3.14159265358979323846
+
+
+vec3 mod289(vec3 x) { return x - floor(x * (1. / 289.)) * 289.; }
+vec2 mod289(vec2 x) { return x - floor(x * (1. / 289.)) * 289.; }
+vec3 permute(vec3 x) { return mod289(((x*34.)+1.)*x); }
+float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+    vec2 i = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    vec2 i1;
+    i1 = (x0.x > x0.y) ? vec2(1., 0.) : vec2(0., 1.);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute(permute(i.y + vec3(0., i1.y, 1.)) + i.x + vec3(0., i1.x, 1.));
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.);
+    m = m*m;
+    m = m*m;
+    vec3 x = 2. * fract(p * C.www) - 1.;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+    vec3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130. * dot(m, g);
+}
+
+vec2 get_img_uv() {
+    vec2 img_uv = vUv;
+    img_uv -= .5;
+    if (u_ratio > u_img_ratio) {
+        img_uv.x = img_uv.x * u_ratio / u_img_ratio;
+    } else {
+        img_uv.y = img_uv.y * u_img_ratio / u_ratio;
+    }
+    float scale_factor = 1.;
+    img_uv *= scale_factor;
+    img_uv += .5;
+
+    img_uv.y = 1. - img_uv.y;
+
+    return img_uv;
+}
+vec2 rotate(vec2 uv, float th) {
+    return mat2(cos(th), sin(th), -sin(th), cos(th)) * uv;
+}
+float get_color_channel(float c1, float c2, float stripe_p, vec3 w, float extra_blur, float b) {
+    float ch = c2;
+    float border = 0.;
+    float blur = u_patternBlur + extra_blur;
+
+    ch = mix(ch, c1, smoothstep(.0, blur, stripe_p));
+
+    border = w[0];
+    ch = mix(ch, c2, smoothstep(border - blur, border + blur, stripe_p));
+
+    b = smoothstep(.2, .8, b);
+    border = w[0] + .4 * (1. - b) * w[1];
+    ch = mix(ch, c1, smoothstep(border - blur, border + blur, stripe_p));
+
+    border = w[0] + .5 * (1. - b) * w[1];
+    ch = mix(ch, c2, smoothstep(border - blur, border + blur, stripe_p));
+
+    border = w[0] + w[1];
+    ch = mix(ch, c1, smoothstep(border - blur, border + blur, stripe_p));
+
+    float gradient_t = (stripe_p - w[0] - w[1]) / w[2];
+    float gradient = mix(c1, c2, smoothstep(0., 1., gradient_t));
+    ch = mix(ch, gradient, smoothstep(border - blur, border + blur, stripe_p));
+
+    return ch;
+}
+
+float get_img_frame_alpha(vec2 uv, float img_frame_width) {
+    float img_frame_alpha = smoothstep(0., img_frame_width, uv.x) * smoothstep(1., 1. - img_frame_width, uv.x);
+    img_frame_alpha *= smoothstep(0., img_frame_width, uv.y) * smoothstep(1., 1. - img_frame_width, uv.y);
+    return img_frame_alpha;
+}
+
+void main() {
+    vec2 uv = vUv;
+    uv.y = 1. - uv.y;
+    uv.x *= u_ratio;
+
+    float diagonal = uv.x - uv.y;
+
+    float t = .001 * u_time;
+
+    vec2 img_uv = get_img_uv();
+    vec4 img = texture(u_image_texture, img_uv);
+
+    vec3 color = vec3(0.);
+    float opacity = 1.;
+
+    vec3 color1 = u_color1;
+    vec3 color2 = u_color2;
+
+    float edge = img.r;
+
+
+    vec2 grad_uv = uv;
+    grad_uv -= .5;
+
+    float dist = length(grad_uv + vec2(0., .2 * diagonal));
+
+    grad_uv = rotate(grad_uv, (.25 - .2 * diagonal) * PI);
+
+    float bulge = pow(1.8 * dist, 1.2);
+    bulge = 1. - bulge;
+    bulge *= pow(uv.y, .3);
+
+
+    float cycle_width = u_patternScale;
+    float thin_strip_1_ratio = .12 / cycle_width * (1. - .4 * bulge);
+    float thin_strip_2_ratio = .07 / cycle_width * (1. + .4 * bulge);
+    float wide_strip_ratio = (1. - thin_strip_1_ratio - thin_strip_2_ratio);
+
+    float thin_strip_1_width = cycle_width * thin_strip_1_ratio;
+    float thin_strip_2_width = cycle_width * thin_strip_2_ratio;
+
+    opacity = 1. - smoothstep(.9 - .5 * u_edge, 1. - .5 * u_edge, edge);
+    opacity *= get_img_frame_alpha(img_uv, 0.01);
+
+
+    float noise = snoise(uv - t);
+
+    edge += (1. - edge) * u_liquid * noise;
+
+    float refr = 0.;
+    refr += (1. - bulge);
+    refr = clamp(refr, 0., 1.);
+
+    float dir = grad_uv.x;
+
+
+    dir += diagonal;
+
+    dir -= 2. * noise * diagonal * (smoothstep(0., 1., edge) * smoothstep(1., 0., edge));
+
+    bulge *= clamp(pow(uv.y, .1), .3, 1.);
+    dir *= (.1 + (1.1 - edge) * bulge);
+
+    dir *= smoothstep(1., .7, edge);
+
+    dir += .18 * (smoothstep(.1, .2, uv.y) * smoothstep(.4, .2, uv.y));
+    dir += .03 * (smoothstep(.1, .2, 1. - uv.y) * smoothstep(.4, .2, 1. - uv.y));
+
+    dir *= (.5 + .5 * pow(uv.y, 2.));
+
+    dir *= cycle_width;
+
+    dir -= t;
+
+    float refr_r = refr;
+    refr_r += .03 * bulge * noise;
+    float refr_b = 1.3 * refr;
+
+    refr_r += 5. * (smoothstep(-.1, .2, uv.y) * smoothstep(.5, .1, uv.y)) * (smoothstep(.4, .6, bulge) * smoothstep(1., .4, bulge));
+    refr_r -= diagonal;
+
+    refr_b += (smoothstep(0., .4, uv.y) * smoothstep(.8, .1, uv.y)) * (smoothstep(.4, .6, bulge) * smoothstep(.8, .4, bulge));
+    refr_b -= .2 * edge;
+
+    refr_r *= u_refraction;
+    refr_b *= u_refraction;
+
+    vec3 w = vec3(thin_strip_1_width, thin_strip_2_width, wide_strip_ratio);
+    w[1] -= .02 * smoothstep(.0, 1., edge + bulge);
+    float stripe_r = mod(dir + refr_r, 1.);
+    float r = get_color_channel(color1.r, color2.r, stripe_r, w, 0.02 + .03 * u_refraction * bulge, bulge);
+    float stripe_g = mod(dir, 1.);
+    float g = get_color_channel(color1.g, color2.g, stripe_g, w, 0.01 / (1. - diagonal), bulge);
+    float stripe_b = mod(dir - refr_b, 1.);
+    float b = get_color_channel(color1.b, color2.b, stripe_b, w, .01, bulge);
+
+    color = vec3(r, g, b);
+
+    color *= opacity;
+
+    fragColor = vec4(color, opacity);
+}
+</script>
+
+<script>
+(() => {
+  const BASE_LABELS = ['Shadow', 'Mid', 'Highlight'];
+  const MAX_COLORS = 6;
+  let colors = ['#0a0818', '#6a7dff', '#f6f2ff'];
+  const rampCanvas = document.createElement('canvas');
+  rampCanvas.width = 256; rampCanvas.height = 1;
+  const rctx = rampCanvas.getContext('2d');
+
+  function hex2rgb(h){
+    const n = parseInt(h.slice(1), 16);
+    return [((n>>16)&255)/255, ((n>>8)&255)/255, (n&255)/255];
+  }
+
+  const renderRamp = () => {
+    const g = rctx.createLinearGradient(0, 0, 256, 0);
+    colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
+    rctx.fillStyle = g;
+    rctx.fillRect(0, 0, 256, 1);
+  };
+
+  const renderColorsUI = () => {
+    const grid = document.getElementById('colorsGrid');
+    grid.innerHTML = '';
+    colors.forEach((c, i) => {
+      const cell = document.createElement('label');
+      cell.className = 'color-cell';
+      const labelText = i < BASE_LABELS.length ? BASE_LABELS[i] : `Stop ${i + 1}`;
+      cell.innerHTML = `<span>${labelText}</span><input type="color" value="${c}">`;
+      const input = cell.querySelector('input');
+      input.addEventListener('input', (e) => {
+        colors[i] = e.target.value;
+        renderRamp(); uploadRamp();
+      });
+      if (i >= BASE_LABELS.length) {
+        const rm = document.createElement('button');
+        rm.className = 'remove';
+        rm.type = 'button';
+        rm.textContent = '×';
+        rm.title = 'Remove stop';
+        rm.addEventListener('click', (e) => {
+          e.preventDefault();
+          colors.splice(i, 1);
+          renderRamp(); uploadRamp(); renderColorsUI();
+        });
+        cell.appendChild(rm);
+      }
+      grid.appendChild(cell);
+    });
+    if (colors.length < MAX_COLORS) {
+      const add = document.createElement('div');
+      add.className = 'add-cell';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '+';
+      btn.title = 'Add color stop';
+      btn.addEventListener('click', () => {
+        const last = colors[colors.length - 1];
+        const mid = colors[Math.floor(colors.length / 2)];
+        colors.push(lerpHex(mid, last, 0.5));
+        renderRamp(); uploadRamp(); renderColorsUI();
+      });
+      add.appendChild(btn);
+      grid.appendChild(add);
+    }
+  };
+
+  const lerpHex = (a, b, t) => {
+    const pa = hex2rgb(a), pb = hex2rgb(b);
+    const r = Math.round(((1-t)*pa[0] + t*pb[0]) * 255);
+    const g = Math.round(((1-t)*pa[1] + t*pb[1]) * 255);
+    const bl= Math.round(((1-t)*pa[2] + t*pb[2]) * 255);
+    return '#' + [r,g,bl].map(x => x.toString(16).padStart(2,'0')).join('');
+  };
+
+  // ---------- presets ----------
+  const PRESETS = {
+    Chrome:     ['#050505', '#3a3a3a', '#a8a8a8', '#f3f3f3'],
+    Gold:       ['#1f1100', '#6a4209', '#d09a23', '#fff1bf'],
+    Copper:     ['#270a02', '#7a3711', '#d97a3e', '#ffd6a5'],
+    Cobalt:     ['#060914', '#1f3da8', '#5a8cf0', '#b5d4ff', '#f5f8ff'],
+    Iridescent: ['#060807', '#0a3f44', '#1ab9b3', '#ff7d3a', '#ffb15c', '#fff0d1'],
+    Thermal:    ['#0a0014', '#2a0840', '#5b1080', '#c4143b', '#ff7a1f', '#ffe8b0'],
+  };
+  const renderPresets = () => {
+    const row = document.getElementById('presetsRow');
+    row.innerHTML = '';
+    for (const [name, palette] of Object.entries(PRESETS)) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'preset-chip';
+      chip.title = name;
+      chip.style.background = `linear-gradient(90deg, ${palette.join(', ')})`;
+      const span = document.createElement('span');
+      span.textContent = name;
+      chip.appendChild(span);
+      chip.addEventListener('click', () => {
+        colors = palette.slice();
+        renderRamp(); uploadRamp(); renderColorsUI();
+      });
+      row.appendChild(chip);
+    }
+  };
+
+  const enhanceSlider = (input) => {
+    const label = input.dataset.label || input.id;
+    const wrap = document.createElement('div');
+    wrap.className = 'lm-slider';
+    const fill = document.createElement('div');
+    fill.className = 'lm-slider__fill';
+    const tick = document.createElement('div');
+    tick.className = 'lm-slider__tick';
+    fill.appendChild(tick);
+    const row = document.createElement('div');
+    row.className = 'lm-slider__row';
+    const labEl = document.createElement('span');
+    labEl.className = 'lm-slider__label';
+    labEl.textContent = label;
+    const valEl = document.createElement('span');
+    valEl.className = 'lm-slider__value';
+    row.appendChild(labEl);
+    row.appendChild(valEl);
+    wrap.appendChild(fill);
+    wrap.appendChild(row);
+    input.parentNode.insertBefore(wrap, input);
+    input.style.display = 'none';
+
+    const min = parseFloat(input.min);
+    const max = parseFloat(input.max);
+    const step = parseFloat(input.step) || 0;
+
+    const sync = () => {
+      const v = parseFloat(input.value);
+      const pct = Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100));
+      fill.style.width = pct + '%';
+      let display;
+      if (step >= 1) display = String(Math.round(v));
+      else if (Math.abs(v) >= 10) display = v.toFixed(1);
+      else if (step <= 0.001) display = v.toFixed(3);
+      else display = v.toFixed(2);
+      valEl.textContent = display;
+    };
+    sync();
+
+    const setFromClientX = (clientX) => {
+      const rect = wrap.getBoundingClientRect();
+      const p = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      let v = min + p * (max - min);
+      if (step > 0) v = Math.round(v / step) * step;
+      v = Math.max(min, Math.min(max, v));
+      input.value = String(v);
+      sync();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    wrap.addEventListener('pointerdown', (e) => {
+      wrap.setPointerCapture(e.pointerId);
+      setFromClientX(e.clientX);
+      const move = (ev) => setFromClientX(ev.clientX);
+      const up = () => {
+        wrap.removeEventListener('pointermove', move);
+        wrap.removeEventListener('pointerup', up);
+        wrap.removeEventListener('pointercancel', up);
+      };
+      wrap.addEventListener('pointermove', move);
+      wrap.addEventListener('pointerup', up);
+      wrap.addEventListener('pointercancel', up);
+    });
+
+    input.addEventListener('change', sync);
+    input._lmSync = sync;
+  };
+
+  document.querySelectorAll('.lm-sliders input[type="range"]').forEach(enhanceSlider);
+
+  // ---------- WebGL ----------
+  const canvas = document.getElementById('gl');
+  const gl = canvas.getContext('webgl2', {
+    antialias: true, preserveDrawingBuffer: true,
+    premultipliedAlpha: false, alpha: true,
+  });
+  if (!gl) {
+    document.getElementById('stage').innerHTML =
+      '<div style="color:#fff;padding:30px;font:14px system-ui">WebGL2 not available in this browser.</div>';
+    return;
+  }
+
+  const compile = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(s));
+      throw new Error('shader compile failed');
+    }
+    return s;
+  };
+
+  const vsSrc = document.getElementById('vs').textContent;
+  const fsSrc = document.getElementById('fs').textContent;
+  const vs = compile(gl.VERTEX_SHADER, vsSrc);
+  const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(prog));
+    throw new Error('link failed');
+  }
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1,
+  ]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {};
+  for (const name of ['u_res','u_time','u_style','u_scale','u_distort','u_speed',
+                      'u_octaves','u_shine','u_fresnel','u_contrast','u_chroma',
+                      'u_ramp','u_bg','u_mask','u_hasMask','u_transparent',
+                      'u_sweep','u_sweepAngle','u_sweepPos','u_sweepWidth']) {
+    U[name] = gl.getUniformLocation(prog, name);
+  }
+
+  // ---------- liquid program ----------
+  const vsLiquidSrc = document.getElementById('vs-liquid').textContent;
+  const fsLiquidSrc = document.getElementById('fs-liquid').textContent;
+  const vsLq = compile(gl.VERTEX_SHADER, vsLiquidSrc);
+  const fsLq = compile(gl.FRAGMENT_SHADER, fsLiquidSrc);
+  const progLq = gl.createProgram();
+  gl.attachShader(progLq, vsLq);
+  gl.attachShader(progLq, fsLq);
+  gl.linkProgram(progLq);
+  if (!gl.getProgramParameter(progLq, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(progLq));
+    throw new Error('liquid link failed');
+  }
+  const ULq = {};
+  for (const name of ['u_image_texture','u_time','u_ratio','u_img_ratio',
+                      'u_patternScale','u_refraction','u_edge','u_patternBlur','u_liquid',
+                      'u_color1','u_color2']) {
+    ULq[name] = gl.getUniformLocation(progLq, name);
+  }
+  const liquidPosLoc = gl.getAttribLocation(progLq, 'a_position');
+
+  // Liquid texture (TEXTURE0 — same unit as mesh mask, but bound at use-time)
+  const liquidTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, liquidTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  // 1x1 white default (so liquid mode renders something even before upload)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array([255,255,255,255]));
+  let liquidImgRatio = 1;
+  let liquidHasImage = false;
+
+  const ctrl = (id) => document.getElementById(id);
+  const sliderIds = ['scale','distort','speed','octaves','shine','fresnel',
+                     'contrast','chroma','pad',
+                     'sweep','sweepAngle','sweepPos','sweepWidth'];
+  const liquidSliderIds = ['lq_patternScale','lq_patternBlur','lq_refraction',
+                           'lq_liquid','lq_edge','lq_speed'];
+  const paramIds = ['style', ...sliderIds, 'bg','exW','exH','transparent', ...liquidSliderIds];
+  const defaults = {};
+  paramIds.forEach((i) => {
+    const el = ctrl(i);
+    defaults[i] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  const defaultColors = colors.slice();
+
+  const applyParams = (p) => {
+    paramIds.forEach((i) => {
+      if (!(i in p)) return;
+      const el = ctrl(i);
+      if (el.type === 'checkbox') el.checked = !!p[i];
+      else el.value = p[i];
+      if (el._lmSync) el._lmSync();
+    });
+    if (Array.isArray(p.colors)) {
+      colors = p.colors.slice(0, MAX_COLORS);
+      renderRamp(); uploadRamp(); renderColorsUI();
+    }
+  };
+  ctrl('reset').onclick = () => applyParams({ ...defaults, colors: defaultColors.slice() });
+
+  // ---------- ramp texture ----------
+  const rampTex = gl.createTexture();
+  const uploadRamp = () => {
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, rampTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, rampCanvas);
+  };
+  renderRamp();
+  renderColorsUI();
+  renderPresets();
+  uploadRamp();
+
+  // ---------- canvas sizing ----------
+  const resize = (w, h) => {
+    // Preview renders at 1:1 CSS pixels for performance; export overrides canvas size directly.
+    const width  = w !== undefined ? w : Math.round(canvas.clientWidth);
+    const height = h !== undefined ? h : Math.round(canvas.clientHeight);
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  };
+  new ResizeObserver(() => resize()).observe(canvas);
+  resize();
+
+  // ---------- mask ----------
+  const maskTex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array([0,0,0,0]));
+
+  let hasMask = false;
+  let currentSvgText = null;
+  const maskCanvas = document.createElement('canvas');
+  const mctx = maskCanvas.getContext('2d');
+
+  const rasterizeMask = async (targetW, targetH) => {
+    if (!currentSvgText) return;
+    const w = targetW || canvas.width;
+    const h = targetH || canvas.height;
+    if (!w || !h) return;
+    maskCanvas.width = w;
+    maskCanvas.height = h;
+    let svg = currentSvgText;
+    if (!/fill=/.test(svg)) svg = svg.replace(/<svg\b/, '<svg fill="#fff"');
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = url;
+      });
+      mctx.clearRect(0, 0, w, h);
+      const pad = parseFloat(ctrl('pad').value);
+      const iw = img.naturalWidth || img.width || 512;
+      const ih = img.naturalHeight || img.height || 512;
+      const maxDim = Math.min(w, h) * (1 - pad * 2);
+      const scale = maxDim / Math.max(iw, ih);
+      const dw = iw * scale, dh = ih * scale;
+      mctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, maskTex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, maskCanvas);
+      hasMask = true;
+    } catch (e) {
+      console.error('SVG load failed', e);
+      toast('Invalid SVG');
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  // Thumbnail preview shared across mesh + liquid panels.
+  let _thumbUrl = null;
+  const setSvgThumb = (svgText) => {
+    if (_thumbUrl) { URL.revokeObjectURL(_thumbUrl); _thumbUrl = null; }
+    const thumbs = [document.getElementById('svgThumb'), document.getElementById('lqSvgThumb')];
+    if (!svgText) {
+      thumbs.forEach((t) => { if (t) { t.innerHTML = ''; t.hidden = true; } });
+      return;
+    }
+    const blob = new Blob([svgText], { type: 'image/svg+xml' });
+    _thumbUrl = URL.createObjectURL(blob);
+    thumbs.forEach((t) => {
+      if (!t) return;
+      t.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = _thumbUrl;
+      img.alt = '';
+      t.appendChild(img);
+      t.hidden = false;
+    });
+  };
+
+  ctrl('uploadBtn').onclick = () => ctrl('svgFile').click();
+  ctrl('svgFile').onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    currentSvgText = await f.text();
+    document.getElementById('svgName').textContent = f.name;
+    setSvgThumb(currentSvgText);
+    await rasterizeMask();
+  };
+  ctrl('clearSvg').onclick = () => {
+    currentSvgText = null; hasMask = false;
+    document.getElementById('svgName').textContent = '';
+    ctrl('svgFile').value = '';
+    setSvgThumb(null);
+  };
+  ctrl('pad').addEventListener('input', () => { if (currentSvgText) rasterizeMask(); });
+
+  // ---------- render ----------
+  const setUniforms = (time, transparent) => {
+    gl.uniform2f(U.u_res, canvas.width, canvas.height);
+    gl.uniform1f(U.u_time, time);
+    gl.uniform1i(U.u_style, parseInt(ctrl('style').value));
+    gl.uniform1f(U.u_scale, parseFloat(ctrl('scale').value));
+    gl.uniform1f(U.u_distort, parseFloat(ctrl('distort').value));
+    gl.uniform1f(U.u_speed, parseFloat(ctrl('speed').value));
+    gl.uniform1i(U.u_octaves, parseInt(ctrl('octaves').value));
+    gl.uniform1f(U.u_shine, parseFloat(ctrl('shine').value));
+    gl.uniform1f(U.u_fresnel, parseFloat(ctrl('fresnel').value));
+    gl.uniform1f(U.u_contrast, parseFloat(ctrl('contrast').value));
+    gl.uniform1f(U.u_chroma, parseFloat(ctrl('chroma').value));
+    gl.uniform3fv(U.u_bg, hex2rgb(ctrl('bg').value));
+    gl.uniform1f(U.u_sweep, parseFloat(ctrl('sweep').value));
+    gl.uniform1f(U.u_sweepAngle, parseFloat(ctrl('sweepAngle').value) * Math.PI / 180);
+    gl.uniform1f(U.u_sweepPos, parseFloat(ctrl('sweepPos').value));
+    gl.uniform1f(U.u_sweepWidth, parseFloat(ctrl('sweepWidth').value));
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, maskTex);
+    gl.uniform1i(U.u_mask, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, rampTex);
+    gl.uniform1i(U.u_ramp, 1);
+    gl.uniform1i(U.u_hasMask, hasMask ? 1 : 0);
+    gl.uniform1i(U.u_transparent, transparent ? 1 : 0);
+  };
+
+  // ---------- mode (mesh / liquid) ----------
+  let mode = 'mesh';
+  const setMode = (m) => {
+    mode = m;
+    document.body.classList.toggle('mode-mesh', m === 'mesh');
+    document.body.classList.toggle('mode-liquid', m === 'liquid');
+    ctrl('tabMesh').classList.toggle('active', m === 'mesh');
+    ctrl('tabLiquid').classList.toggle('active', m === 'liquid');
+  };
+  document.body.classList.add('mode-mesh');
+  ctrl('tabMesh').onclick = () => setMode('mesh');
+  ctrl('tabLiquid').onclick = () => setMode('liquid');
+
+  // ---------- parseLogoImage (port of paper-design/liquid-logo) ----------
+  // Cleans an image into a black/white mask with a beveled gradient edge,
+  // via a 300-iteration Poisson solve. Constants C=0.01, alpha=2.0.
+  const parseLogoImage = (file) => new Promise((resolve, reject) => {
+    if (!file) { reject(new Error('No file')); return; }
+    const canvasL = document.createElement('canvas');
+    const ctxL = canvasL.getContext('2d');
+    if (!ctxL) { reject(new Error('No 2d ctx')); return; }
+    const img = new Image();
+    const isSvg = typeof file === 'string'
+      ? /\.svg$/i.test(file)
+      : file.type === 'image/svg+xml';
+    img.onload = () => {
+      if (isSvg) { img.width = 1000; img.height = 1000; }
+      const MAX_SIZE = 1000, MIN_SIZE = 500;
+      let width = img.naturalWidth || img.width;
+      let height = img.naturalHeight || img.height;
+      if (width > MAX_SIZE || height > MAX_SIZE || width < MIN_SIZE || height < MIN_SIZE) {
+        if (width > height) {
+          if (width > MAX_SIZE) { height = Math.round(height * MAX_SIZE / width); width = MAX_SIZE; }
+          else if (width < MIN_SIZE) { height = Math.round(height * MIN_SIZE / width); width = MIN_SIZE; }
+        } else {
+          if (height > MAX_SIZE) { width = Math.round(width * MAX_SIZE / height); height = MAX_SIZE; }
+          else if (height < MIN_SIZE) { width = Math.round(width * MIN_SIZE / height); height = MIN_SIZE; }
+        }
+      }
+      canvasL.width = width;
+      canvasL.height = height;
+      const shapeCanvas = document.createElement('canvas');
+      shapeCanvas.width = width; shapeCanvas.height = height;
+      const shapeCtx = shapeCanvas.getContext('2d');
+      shapeCtx.drawImage(img, 0, 0, width, height);
+      const shapeImageData = shapeCtx.getImageData(0, 0, width, height);
+      const data = shapeImageData.data;
+      const shapeMask = new Array(width * height).fill(false);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx4 = (y * width + x) * 4;
+          const r = data[idx4], g = data[idx4+1], b = data[idx4+2], a = data[idx4+3];
+          if ((r === 255 && g === 255 && b === 255 && a === 255) || a === 0) {
+            shapeMask[y * width + x] = false;
+          } else {
+            shapeMask[y * width + x] = true;
+          }
+        }
+      }
+      const inside = (x, y) => {
+        if (x < 0 || x >= width || y < 0 || y >= height) return false;
+        return shapeMask[y * width + x];
+      };
+      const boundaryMask = new Array(width * height).fill(false);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          if (!shapeMask[idx]) continue;
+          let isBoundary = false;
+          for (let ny = y - 1; ny <= y + 1 && !isBoundary; ny++) {
+            for (let nx = x - 1; nx <= x + 1 && !isBoundary; nx++) {
+              if (!inside(nx, ny)) isBoundary = true;
+            }
+          }
+          if (isBoundary) boundaryMask[idx] = true;
+        }
+      }
+      let u = new Float32Array(width * height);
+      let newU = new Float32Array(width * height);
+      const C = 0.01;
+      const ITERATIONS = 300;
+      const getU = (x, y, arr) => {
+        if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+        if (!shapeMask[y * width + x]) return 0;
+        return arr[y * width + x];
+      };
+      for (let iter = 0; iter < ITERATIONS; iter++) {
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            if (!shapeMask[idx] || boundaryMask[idx]) { newU[idx] = 0; continue; }
+            const sumN = getU(x+1, y, u) + getU(x-1, y, u) + getU(x, y+1, u) + getU(x, y-1, u);
+            newU[idx] = (C + sumN) / 4;
+          }
+        }
+        for (let i = 0; i < width * height; i++) u[i] = newU[i];
+      }
+      let maxVal = 0;
+      for (let i = 0; i < width * height; i++) if (u[i] > maxVal) maxVal = u[i];
+      const alpha = 2.0;
+      const outImg = ctxL.createImageData(width, height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          const px = idx * 4;
+          if (!shapeMask[idx]) {
+            outImg.data[px] = 255; outImg.data[px+1] = 255; outImg.data[px+2] = 255; outImg.data[px+3] = 255;
+          } else {
+            const raw = maxVal > 0 ? u[idx] / maxVal : 0;
+            const remapped = Math.pow(raw, alpha);
+            const gray = 255 * (1 - remapped);
+            outImg.data[px] = gray; outImg.data[px+1] = gray; outImg.data[px+2] = gray; outImg.data[px+3] = 255;
+          }
+        }
+      }
+      resolve({ imageData: outImg, width, height });
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = typeof file === 'string' ? file : URL.createObjectURL(file);
+  });
+
+  const uploadLiquidTexture = (imageData) => {
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, liquidTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, imageData.width, imageData.height,
+                  0, gl.RGBA, gl.UNSIGNED_BYTE, imageData.data);
+    liquidImgRatio = imageData.width / imageData.height;
+    liquidHasImage = true;
+  };
+
+  // Shared upload: when user picks a file in EITHER mode's upload control,
+  // produce both a mesh hard-mask raster AND a liquid Poisson-processed texture.
+  const ingestSharedImage = async (file) => {
+    if (!file) return;
+    // Mesh path: store SVG text if it's an SVG; for raster, also build a "mask" by
+    // drawing it through the existing rasterizeMask if SVG. For non-SVG raster
+    // images, we won't update the mesh mask (mesh expects vector masks).
+    const name = file.name || 'image';
+    const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(name);
+    if (isSvg) {
+      currentSvgText = await file.text();
+      document.getElementById('svgName').textContent = name;
+      setSvgThumb(currentSvgText);
+      await rasterizeMask();
+    }
+    document.getElementById('lqImgName').textContent = name + ' — Processing…';
+    // Yield to UI thread before the heavy 300-iter Poisson solve.
+    setTimeout(async () => {
+      try {
+        const { imageData } = await parseLogoImage(file);
+        uploadLiquidTexture(imageData);
+        document.getElementById('lqImgName').textContent = name;
+      } catch (e) {
+        console.error('parseLogoImage failed', e);
+        document.getElementById('lqImgName').textContent = name + ' — failed';
+      }
+    }, 0);
+  };
+
+  ctrl('lqUploadBtn').onclick = () => ctrl('lqImgFile').click();
+  ctrl('lqImgFile').onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    await ingestSharedImage(f);
+  };
+  ctrl('lqClearImg').onclick = () => {
+    liquidHasImage = false;
+    document.getElementById('lqImgName').textContent = '';
+    ctrl('lqImgFile').value = '';
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, liquidTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                  new Uint8Array([255,255,255,255]));
+    // Clear shared SVG state too (liquid is now SVG-only and shared with mesh).
+    currentSvgText = null; hasMask = false;
+    document.getElementById('svgName').textContent = '';
+    ctrl('svgFile').value = '';
+    setSvgThumb(null);
+  };
+
+  // Hook the mesh upload to also produce the liquid texture.
+  const _origSvgChange = ctrl('svgFile').onchange;
+  ctrl('svgFile').onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (_origSvgChange) await _origSvgChange.call(ctrl('svgFile'), e);
+    document.getElementById('lqImgName').textContent = (f.name || 'image') + ' — Processing…';
+    setTimeout(async () => {
+      try {
+        const { imageData } = await parseLogoImage(f);
+        uploadLiquidTexture(imageData);
+        document.getElementById('lqImgName').textContent = f.name || 'image';
+      } catch (err) {
+        console.error('parseLogoImage failed', err);
+        document.getElementById('lqImgName').textContent = (f.name || 'image') + ' — failed';
+      }
+    }, 0);
+  };
+
+  // ---------- liquid render helpers ----------
+  const useMeshProgram = () => {
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  };
+  const useLiquidProgram = () => {
+    gl.useProgram(progLq);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.enableVertexAttribArray(liquidPosLoc);
+    gl.vertexAttribPointer(liquidPosLoc, 2, gl.FLOAT, false, 0, 0);
+  };
+
+  let liquidTime = 0;
+  let liquidLastFrame = 0;
+  const setLiquidUniforms = (W, H) => {
+    gl.uniform1f(ULq.u_ratio, W / H);
+    gl.uniform1f(ULq.u_img_ratio, liquidImgRatio);
+    gl.uniform1f(ULq.u_time, liquidTime);
+    gl.uniform1f(ULq.u_patternScale, parseFloat(ctrl('lq_patternScale').value));
+    gl.uniform1f(ULq.u_refraction,   parseFloat(ctrl('lq_refraction').value));
+    gl.uniform1f(ULq.u_edge,         parseFloat(ctrl('lq_edge').value));
+    gl.uniform1f(ULq.u_patternBlur,  parseFloat(ctrl('lq_patternBlur').value));
+    gl.uniform1f(ULq.u_liquid,       parseFloat(ctrl('lq_liquid').value));
+    const c1 = hex2rgb(colors[colors.length - 1]);
+    const c2 = hex2rgb(colors[0]);
+    gl.uniform3f(ULq.u_color1, c1[0], c1[1], c1[2]);
+    gl.uniform3f(ULq.u_color2, c2[0], c2[1], c2[2]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, liquidTex);
+    gl.uniform1i(ULq.u_image_texture, 0);
+  };
+
+  let lastW = 0, lastH = 0, paused = false;
+  const start = performance.now();
+
+  const loop = () => {
+    if (paused) { requestAnimationFrame(loop); return; }
+    resize();
+    if (mode === 'mesh') {
+      useMeshProgram();
+      if ((canvas.width !== lastW || canvas.height !== lastH) && currentSvgText) {
+        rasterizeMask();
+      }
+      lastW = canvas.width; lastH = canvas.height;
+      const t = (performance.now() - start) / 1000;
+      setUniforms(t, false);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    } else {
+      useLiquidProgram();
+      const now = performance.now();
+      const dt = liquidLastFrame ? (now - liquidLastFrame) : 0;
+      liquidLastFrame = now;
+      liquidTime += dt * parseFloat(ctrl('lq_speed').value);
+      setLiquidUniforms(canvas.width, canvas.height);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space') return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    e.preventDefault();
+    paused = !paused;
+    if (!paused) liquidLastFrame = 0;
+  });
+
+  // ---------- randomize ----------
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const hsl2hex = (h, s, l) => {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+      const c = l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+      return Math.round(c * 255);
+    };
+    const [r,g,b] = [f(0), f(8), f(4)];
+    return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+  };
+  const randomizePalette = () => {
+    const baseHue = rand(0, 360);
+    const hueDrift = rand(10, 80);
+    const nStops = 3 + Math.floor(rand(0, 3.99));
+    const newColors = [];
+    for (let i = 0; i < nStops; i++) {
+      const t = i / (nStops - 1);
+      const h = (baseHue + hueDrift * t + (Math.random() - .5) * 20) % 360;
+      const s = 50 + rand(-15, 30);
+      const l = 8 + t * 85 + rand(-5, 5);
+      newColors.push(hsl2hex((h + 360) % 360, Math.max(10, Math.min(95, s)), Math.max(4, Math.min(96, l))));
+    }
+    colors = newColors;
+    renderRamp(); uploadRamp(); renderColorsUI();
+    return baseHue;
+  };
+
+  ctrl('randomizeColors').onclick = () => { randomizePalette(); };
+
+  const randomizeSliders = (selector) => {
+    document.querySelectorAll(selector).forEach((el) => {
+      const min = parseFloat(el.min), max = parseFloat(el.max);
+      const step = parseFloat(el.step) || 0;
+      let v = rand(min, max);
+      if (step > 0) v = Math.round(v / step) * step;
+      el.value = String(v);
+      if (el._lmSync) el._lmSync();
+    });
+  };
+
+  ctrl('randomize').onclick = () => {
+    if (mode === 'liquid') {
+      randomizeSliders('.liquid-only .lm-sliders input[type="range"]');
+      return;
+    }
+    randomizeSliders('.mesh-only .lm-sliders input[type="range"]');
+    ctrl('style').value = String(Math.floor(rand(0, 4)));
+    const baseHue = randomizePalette();
+    ctrl('bg').value = hsl2hex(baseHue, 30, 5 + rand(0, 8));
+  };
+
+  // ---------- export ----------
+  const toast = (msg) => {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 1400);
+  };
+
+  const buildExport = () => {
+    const bg = hex2rgb(ctrl('bg').value).map((x) => x.toFixed(3)).join(', ');
+    const header = `// Liquid Metal — exported ${new Date().toISOString()}
+// colors        = [${colors.join(', ')}]
+// u_bg          = vec3(${bg})
+// u_style       = ${ctrl('style').value}
+// u_scale       = ${ctrl('scale').value}
+// u_distort     = ${ctrl('distort').value}
+// u_speed       = ${ctrl('speed').value}
+// u_octaves     = ${ctrl('octaves').value}
+// u_shine       = ${ctrl('shine').value}
+// u_fresnel     = ${ctrl('fresnel').value}
+// u_contrast    = ${ctrl('contrast').value}
+// u_chroma      = ${ctrl('chroma').value}
+
+`;
+    return header + fsSrc.trim();
+  };
+
+  ctrl('copyShader').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(buildExport());
+      toast('Copied GLSL');
+    } catch { toast('Copy failed'); }
+  };
+  ctrl('viewShader').onclick = () => {
+    document.getElementById('shaderSrc').textContent = buildExport();
+    document.getElementById('shaderDlg').showModal();
+  };
+  ctrl('closeDlg').onclick = () => document.getElementById('shaderDlg').close();
+
+  ctrl('snap').onclick = async () => {
+    const W = Math.max(64, Math.min(4096, parseInt(ctrl('exW').value) || 1024));
+    const H = Math.max(64, Math.min(4096, parseInt(ctrl('exH').value) || 1024));
+    const transparent = ctrl('transparent').checked;
+    const btn = ctrl('snap');
+    btn.disabled = true;
+    btn.textContent = 'Rendering…';
+    try {
+      paused = true;
+      canvas.width = W;
+      canvas.height = H;
+      gl.viewport(0, 0, W, H);
+      if (mode === 'mesh') {
+        useMeshProgram();
+        if (currentSvgText) await rasterizeMask(W, H);
+        const t = (performance.now() - start) / 1000;
+        setUniforms(t, transparent);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      } else {
+        useLiquidProgram();
+        setLiquidUniforms(W, H);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+      canvas.toBlob((b) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = `liquid-metal-${Date.now()}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }, 'image/png');
+    } finally {
+      paused = false;
+      btn.disabled = false;
+      btn.textContent = 'Save PNG';
+    }
+  };
+})();
+</script>
+</body>
+</html>
